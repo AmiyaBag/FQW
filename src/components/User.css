@@ -1,0 +1,364 @@
+.user-container {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.user-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.user-header h1 {
+  margin: 0;
+  color: #333;
+}
+
+.user-content {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.user-info {
+  margin-bottom: 30px;
+}
+
+.user-info h2 {
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.user-info p {
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+.user-actions {
+  display: flex;
+  gap: 15px;
+}
+
+.action-button {
+  padding: 10px 20px;
+  background-color: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.action-button:hover {
+  background-color: #357abd;
+}
+
+.logout-button {
+  padding: 8px 16px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.logout-button:hover {
+  background-color: #c82333;
+} 
+
+.user-kks-notifications {
+  margin-top: 25px; /* Отступ сверху от блока информации/действий */
+  margin-bottom: 20px; /* Отступ снизу */
+  padding: 20px; /* Внутренние отступы */
+  border: 1px solid #e0e0e0; /* Легкая рамка */
+  border-radius: 8px; /* Скругление углов */
+  background-color: #f9f9f9; /* Очень светлый фон для выделения */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* Небольшая тень */
+}
+
+.user-kks-notifications h2 {
+  margin-top: 0; /* Убираем верхний отступ у заголовка внутри блока */
+  margin-bottom: 15px; /* Отступ под заголовком */
+  font-size: 1.3em; /* Немного уменьшим заголовок */
+  color: #333; /* Темный цвет для заголовка */
+  border-bottom: 1px solid #eee; /* Линия под заголовком */
+  padding-bottom: 10px; /* Отступ до линии */
+}
+
+/* Стили для сообщений (Общие) */
+.user-kks-notifications p {
+  padding: 12px 15px;
+  margin-bottom: 15px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  line-height: 1.5;
+}
+
+/* Сообщение об ошибке (если уже есть - хорошо, если нет - добавьте или настройте) */
+.error-message { /* Убедитесь, что этот класс есть в JSX для ошибок */
+  color: #a94442; /* Темно-красный текст */
+  background-color: #f2dede; /* Светло-красный фон */
+  border-color: #ebccd1; /* Красная рамка */
+}
+
+/* Сообщение-предупреждение (требуется обучение) */
+.notification-warning {
+  color: #8a6d3b; /* Темно-желтый/коричневый текст */
+  background-color: #fcf8e3; /* Светло-желтый фон */
+  border-color: #faebcc; /* Желтая рамка */
+}
+.notification-warning strong {
+  color: #7a5d2b; /* Немного темнее для акцента */
+}
+
+
+/* Сообщение об успехе (все пройдено) */
+.notification-success {
+  color: #3c763d; /* Темно-зеленый текст */
+  background-color: #dff0d8; /* Светло-зеленый фон */
+  border-color: #d6e9c6; /* Зеленая рамка */
+}
+
+/* Стили для списка ККС, требующих обучения */
+.user-kks-notifications ul {
+  list-style: none; /* Убираем маркеры списка */
+  padding-left: 0; /* Убираем отступ слева */
+  margin-top: 10px; /* Небольшой отступ сверху от предупреждения */
+}
+
+.user-kks-notifications li {
+  background-color: #fff; /* Белый фон для каждого элемента */
+  border: 1px solid #e8e8e8;
+  border-left: 4px solid #d9534f; /* Красная полоска слева для акцента на необходимости действия */
+  padding: 12px 15px;
+  margin-bottom: 10px; /* Отступ между элементами */
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+/* Делаем последний элемент без нижнего отступа */
+.user-kks-notifications li:last-child {
+  margin-bottom: 0;
+}
+
+.user-kks-notifications li strong {
+  display: block; /* Чтобы small перенесся на новую строку */
+  margin-bottom: 5px; /* Отступ под названием ККС */
+  color: #444; /* Цвет названия ККС */
+  font-weight: 600; /* Немного жирнее */
+}
+
+.user-kks-notifications li small {
+  color: #777; /* Серый цвет для даты */
+  font-size: 0.9em; /* Чуть меньше основного текста */
+}
+
+/* Стили для сообщения о загрузке (можно добавить класс .loading-message в JSX) */
+.loading-message {
+    color: #666;
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}
+
+.user-recommended-programs {
+  background-color: #f0f0f0; /* Slightly different background */
+  padding: 15px;
+  border-radius: 5px;
+  margin-top: 20px;
+  border: 1px solid #dcdcdc;
+}
+
+.user-recommended-programs h2 {
+  margin-top: 0;
+  color: #333;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 5px;
+  margin-bottom: 10px;
+}
+
+.user-recommended-programs ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.user-recommended-programs .program-item {
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 3px;
+}
+
+.user-recommended-programs .program-item strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #0056b3; /* Or your theme color */
+}
+
+.user-recommended-programs .program-item small {
+  color: #555;
+  font-size: 0.9em;
+}
+
+.user-recommended-programs .error-message {
+  color: #dc3545; /* Bootstrap danger color */
+  font-weight: bold;
+}
+
+.kks-table {
+  width: 100%; /* Таблица на всю ширину контейнера */
+  border-collapse: collapse; /* Убираем двойные рамки между ячейками */
+  margin-top: 15px; /* Отступ сверху от заголовка */
+  margin-bottom: 20px; /* Отступ снизу */
+  font-size: 0.95em; /* Слегка уменьшим шрифт для компактности */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); /* Небольшая тень */
+}
+
+/* === Стили заголовков и ячеек === */
+.kks-table th,
+.kks-table td {
+  border: 1px solid #e0e0e0; /* Светлые рамки */
+  padding: 10px 12px; /* Внутренние отступы в ячейках */
+  text-align: left; /* Выравнивание текста по левому краю */
+  vertical-align: top; /* Выравнивание по верху, полезно для ячейки с датой/кнопкой */
+}
+
+.kks-table th {
+  background-color: #f8f9fa; /* Светлый фон для заголовков */
+  font-weight: 600; /* Полужирный шрифт заголовков */
+  white-space: nowrap; /* Запрет переноса в заголовках (если нужно) */
+}
+
+/* === Стили для колонки Статуса === */
+.kks-table td.status {
+  text-align: center; /* Иконка по центру */
+  font-size: 1.3em; /* Увеличим размер иконки */
+  font-weight: bold;
+  width: 80px; /* Фиксированная ширина колонки статуса */
+  vertical-align: middle; /* Иконка по центру вертикально */
+}
+
+.status-ok {
+  color: #28a745; /* Зеленый цвет для галочки */
+}
+
+.status-needed {
+  color: #dc3545; /* Красный цвет для крестика */
+}
+
+/* === Стили для колонки Действие / Дата === */
+.kks-table td:last-child span {
+  display: block; /* Дата занимает всю строку */
+  /* margin-bottom: 5px; */ /* Убрали отступ здесь, т.к. кнопка в своем div */
+  color: #6c757d; /* Слегка приглушенный цвет для даты */
+  font-size: 0.9em;
+}
+
+.kks-table td:last-child div { /* Стиль для div, в котором кнопка */
+   margin-top: 8px; /* Отступ между датой и кнопкой */
+}
+
+/* === Стили для кнопки "Показать/Скрыть программы" === */
+.recommendation-toggle-button {
+  padding: 6px 12px;
+  font-size: 0.9em;
+  cursor: pointer;
+  border: 1px solid #adb5bd;
+  background-color: #f1f3f5;
+  color: #343a40;
+  border-radius: 4px;
+  transition: background-color 0.2s ease; /* Плавный переход при наведении */
+}
+
+.recommendation-toggle-button:hover {
+  background-color: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.recommendation-toggle-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* === Стили для строки с рекомендациями === */
+.recommendations-row td {
+  background-color: #fdfdfe; /* Очень светлый фон для выделения */
+  border-top: 2px solid #dee2e6; /* Более заметная верхняя граница */
+  padding: 0; /* Убираем стандартный padding, т.к. есть внутренний div */
+}
+
+.recommendations-details {
+  padding: 15px 20px; /* Внутренние отступы для блока рекомендаций */
+}
+
+.recommendations-details h4 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 1em;
+  font-weight: 600;
+  color: #495057;
+}
+
+.recommendations-details ul {
+  list-style: none; /* Убираем стандартные маркеры */
+  margin: 0;
+  padding: 0;
+}
+
+.recommendations-details .program-item {
+  margin-bottom: 10px;
+  padding-left: 15px; /* Небольшой отступ слева */
+  position: relative;
+  border-left: 3px solid #007bff; /* Цветная линия слева */
+  background-color: #fff; /* Белый фон для элемента списка */
+  padding: 8px 12px 8px 15px;
+  border-radius: 3px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/*
+.recommendations-details .program-item::before {
+  /* Можно добавить кастомный маркер, если нужно */
+  /* content: '➔';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  color: #007bff;
+}
+*/
+
+.recommendations-details .program-item strong {
+  display: block; /* Имя программы на своей строке */
+  margin-bottom: 3px;
+  color: #343a40;
+}
+
+
+.recommendations-details .program-item small {
+  color: #6c757d;
+  font-size: 0.85em;
+}
+
+/* === Сообщения об ошибках / загрузке === */
+.error-message {
+    color: #dc3545;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.loading {
+    padding: 15px;
+    text-align: center;
+    color: #6c757d;
+}
