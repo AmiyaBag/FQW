@@ -38,13 +38,23 @@ router.post('/', async (req, res) => {
     if (!Name_KKS) { return res.status(400).json({ error: 'Название KKS обязательно' }); }
     try {
         const insertQuery = 'INSERT INTO kks (name_kks, SName_KKS) VALUES (?, ?)';
-        const [result] = await pool.query(insertQuery, [Name_KKS, SName_KKS || null]); // SName может быть null
+        const [result] = await pool.query(insertQuery, [Name_KKS, SName_KKS || null]);
         const insertId = result.insertId;
         const [newKks] = await pool.query('SELECT ID_KKS, name_kks AS Name_KKS, SName_KKS FROM kks WHERE ID_KKS = ?', [insertId]);
         res.status(201).json(newKks[0] || { id: insertId });
     } catch (err) {
-        console.error('Ошибка при добавлении KKS:', err);
-        res.status(500).json({ error: 'Ошибка сервера при добавлении KKS' });
+        console.error('Ошибка при добавлении KKS:', err.message); // Log message
+        console.error('SQL State:', err.sqlState); // Log SQL state if it's a database error
+        console.error('Error Code:', err.code);     // Log error code if it's a database error (e.g., ER_DUP_ENTRY)
+        console.error('Full Error Object:', err);   // Log the full object for more detail
+
+        // Optionally, send a more detailed error to the frontend during development
+        res.status(500).json({
+            error: 'Ошибка сервера при добавлении KKS',
+            details: err.message, // Send error message to frontend
+            code: err.code,       // Send error code to frontend
+            sqlState: err.sqlState // Send SQL state to frontend
+        });
     }
 });
 

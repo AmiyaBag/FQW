@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './User.css'; // Убедитесь, что стили подключены и обновлены
@@ -7,29 +7,27 @@ const apiUrl = process.env.REACT_APP_API_URL;
 
 // --- Helper Functions (без изменений) ---
 const isTrainingNeeded = (lastTrainingDateStr) => {
-    // ... (ваш существующий код)
-     if (!lastTrainingDateStr) {
-         return true; // No training date found, assume training is needed
-     }
-     try {
-         const lastTrainingDate = new Date(lastTrainingDateStr);
-         const threeYearsAgo = new Date();
-         threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+    if (!lastTrainingDateStr) {
+        return true; // No training date found, assume training is needed
+    }
+    try {
+        const lastTrainingDate = new Date(lastTrainingDateStr);
+        const threeYearsAgo = new Date();
+        threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
 
-         if (isNaN(lastTrainingDate.getTime())) {
-             console.warn("Invalid date encountered:", lastTrainingDateStr);
-             return true; // Treat invalid date as needing training
-         }
+        if (isNaN(lastTrainingDate.getTime())) {
+            console.warn("Invalid date encountered:", lastTrainingDateStr);
+            return true; // Treat invalid date as needing training
+        }
 
-         return lastTrainingDate < threeYearsAgo;
-     } catch (e) {
-         console.error("Error parsing date:", lastTrainingDateStr, e);
-         return true; // Error parsing date, assume training needed
-     }
+        return lastTrainingDate < threeYearsAgo;
+    } catch (e) {
+        console.error("Error parsing date:", lastTrainingDateStr, e);
+        return true; // Error parsing date, assume training needed
+    }
 };
 
 const formatDate = (dateStr) => {
-    // ... (ваш существующий код)
     if (!dateStr) return 'Нет данных';
     try {
         const date = new Date(dateStr);
@@ -45,15 +43,30 @@ function User() {
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
     const [kksStatus, setKksStatus] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(true); // This remains for initial user load
     const [error, setError] = useState(null);
 
-    // --- Новые состояния для рекомендаций по конкретному ККС ---
-    const [visibleRecommendationsKksId, setVisibleRecommendationsKksId] = useState(null); // ID ККС, чьи рекомендации показываем
-    const [currentRecommendations, setCurrentRecommendations] = useState([]); // Список программ для выбранного ККС
-    const [isCurrentRecLoading, setIsCurrentRecLoading] = useState(false); // Загрузка для выбранного ККС
-    const [currentRecError, setCurrentRecError] = useState(null); // Ошибка для выбранного ККС
-    // --- ---
+    // --- Состояния для рекомендаций по конкретному ККС (без изменений) ---
+    const [visibleRecommendationsKksId, setVisibleRecommendationsKksId] = useState(null);
+    const [currentRecommendations, setCurrentRecommendations] = useState([]);
+    const [isCurrentRecLoading, setIsCurrentRecLoading] = useState(false);
+    const [currentRecError, setCurrentRecError] = useState(null);
+
+    // --- Состояния для общих списков (изменено: теперь для организаций) ---
+    const [allKks, setAllKks] = useState([]);
+    const [allOrganizations, setAllOrganizations] = useState([]); // <-- Changed from allPrograms
+    const [showAllKks, setShowAllKks] = useState(false);
+    const [showAllOrganizations, setShowAllOrganizations] = useState(false); // <-- Changed from showAllPrograms
+    const [isAllKksLoading, setIsAllKksLoading] = useState(false);
+    const [allKksError, setAllKksError] = useState(null);
+    const [isAllOrganizationsLoading, setIsAllOrganizationsLoading] = useState(false); // <-- Changed from isAllProgramsLoading
+    const [allOrganizationsError, setAllOrganizationsError] = useState(null); // <-- Changed from allProgramsError
+
+    // --- Состояния для времени загрузки (УДАЛЕНЫ) ---
+    // const [kksStatusLoadTime, setKksStatusLoadTime] = useState(null);
+    // const [allKksLoadTime, setAllKksLoadTime] = useState(null);
+    // const [allProgramsLoadTime, setAllProgramsLoadTime] = useState(null);
+    // const [recommendationsLoadTime, setRecommendationsLoadTime] = useState(null);
 
     // Эффект для загрузки данных пользователя (без изменений)
     useEffect(() => {
@@ -69,6 +82,7 @@ function User() {
                 console.error("Ошибка парсинга пользователя из localStorage:", e);
                 localStorage.removeItem('user');
                 setError("Ошибка данных пользователя. Пожалуйста, войдите снова.");
+            } finally {
                 setIsLoading(false);
             }
         } else {
@@ -78,34 +92,30 @@ function User() {
         }
     }, []);
 
-    // Эффект для загрузки ТОЛЬКО статуса ККС
+    // Эффект для загрузки ТОЛЬКО статуса ККС (Убраны расчеты времени)
     useEffect(() => {
-        if (!user || !user.workerId) {
+        if (!user || user.role !== 0) {
             if (user === null && !isLoading) {
                 setError("Данные пользователя отсутствуют.");
+            } else if (user?.role !== 0) {
+                console.log("Пользователь не является работником (role != 0), данные ККС не запрашиваются.");
+                setKksStatus([]);
             }
             return;
         }
 
-        if (user.role !== 0) {
-            console.log("Пользователь не является работником (role != 0), данные ККС не запрашиваются.");
-            setKksStatus([]);
-            setIsLoading(false);
-            return;
-        }
-
-        const fetchKksStatus = async () => {
-            setIsLoading(true);
+        const fetchKksData = async () => {
             setError(null);
-            setKksStatus([]);
-            // Сбрасываем состояния рекомендаций при перезагрузке статуса
+            // setKksStatusLoadTime(null); // Removed
             setVisibleRecommendationsKksId(null);
             setCurrentRecommendations([]);
             setIsCurrentRecLoading(false);
             setCurrentRecError(null);
 
+            // const startTime = performance.now(); // Removed
+
             try {
-                console.log(`Workspaceing KKS status for workerId: ${user.workerId}`);
+                console.log(`Fetching KKS status for workerId: ${user.workerId}`);
                 const kksResponse = await axios.get(`${apiUrl}/api/user-kks-status?userId=${user.workerId}`);
                 const fetchedKksStatus = kksResponse.data || [];
                 setKksStatus(fetchedKksStatus);
@@ -115,44 +125,98 @@ function User() {
                 setError(kksErr.response?.data?.error || 'Не удалось загрузить статус обучения по ККС.');
                 setKksStatus([]);
             } finally {
-                setIsLoading(false);
+                // const endTime = performance.now(); // Removed
+                // setKksStatusLoadTime((endTime - startTime).toFixed(2)); // Removed
             }
         };
 
-        fetchKksStatus();
+        if (user && user.role === 0 && !isLoading) {
+            fetchKksData();
+        }
 
-    }, [user]); // Зависимость только от user
+    }, [user, isLoading]);
 
-    // --- Обработчик для показа/скрытия и загрузки рекомендаций ---
+    // --- Обработчик для показа/скрытия и загрузки рекомендаций (Убраны расчеты времени) ---
     const handleToggleRecommendations = useCallback(async (kksId) => {
-        // Если кликнули по той же кнопке, просто скрываем
         if (visibleRecommendationsKksId === kksId) {
             setVisibleRecommendationsKksId(null);
-            setCurrentRecommendations([]); // Очищаем список
+            setCurrentRecommendations([]);
+            // setRecommendationsLoadTime(null); // Removed
             return;
         }
 
-        // Показываем лоадер и сбрасываем предыдущие данные/ошибки
         setVisibleRecommendationsKksId(kksId);
         setIsCurrentRecLoading(true);
         setCurrentRecommendations([]);
         setCurrentRecError(null);
+        // setRecommendationsLoadTime(null); // Removed
+
+        // const startTime = performance.now(); // Removed
 
         try {
-            console.log(`Workspaceing recommended programs for KKS ID: ${kksId}`);
-            // Запрос ТОЛЬКО для ОДНОГО kksId
+            console.log(`Fetching recommended programs for KKS ID: ${kksId}`);
             const recResponse = await axios.get(`${apiUrl}/api/programs/recommended?kksIds=${kksId}`);
             console.log("Recommended Programs Response for KKS", kksId, ":", recResponse.data);
             setCurrentRecommendations(recResponse.data || []);
         } catch (recErr) {
             console.error(`Ошибка при загрузке рекомендуемых программ для KKS ${kksId}:`, recErr);
             setCurrentRecError(recErr.response?.data?.error || 'Не удалось загрузить рекомендуемые программы.');
-            setCurrentRecommendations([]); // Убедимся, что пусто при ошибке
+            setCurrentRecommendations([]);
         } finally {
-            setIsCurrentRecLoading(false); // Загрузка завершена (успех/ошибка)
+            // const endTime = performance.now(); // Removed
+            // setRecommendationsLoadTime((endTime - startTime).toFixed(2)); // Removed
+            setIsCurrentRecLoading(false);
         }
-    }, [visibleRecommendationsKksId, apiUrl]); // Зависим от visibleRecommendationsKksId для логики скрытия
-    // --- ---
+    }, [visibleRecommendationsKksId]);
+
+    // --- Эффект для загрузки ОБЩЕГО списка ККС (Убраны расчеты времени) ---
+    useEffect(() => {
+        const fetchAllKks = async () => {
+            if (showAllKks && allKks.length === 0 && !isAllKksLoading && !allKksError) {
+                setIsAllKksLoading(true);
+                setAllKksError(null);
+                // setAllKksLoadTime(null); // Removed
+                // const startTime = performance.now(); // Removed
+                try {
+                    console.log("Fetching all KKS criteria...");
+                    const response = await axios.get(`${apiUrl}/api/kks`);
+                    setAllKks(response.data || []);
+                    console.log("All KKS Response:", response.data);
+                } catch (err) {
+                    console.error('Ошибка при загрузке всех ККС:', err);
+                    setAllKksError(err.response?.data?.error || 'Не удалось загрузить общий список ККС.');
+                } finally {
+                    // const endTime = performance.now(); // Removed
+                    // setAllKksLoadTime((endTime - startTime).toFixed(2)); // Removed
+                    setIsAllKksLoading(false);
+                }
+            }
+        };
+        fetchAllKks();
+    }, [showAllKks, allKks.length, isAllKksLoading, allKksError]);
+
+    // --- Эффект для загрузки ОБЩЕГО списка ОРГАНИЗАЦИЙ (Новый) ---
+    useEffect(() => {
+        const fetchAllOrganizations = async () => {
+            if (showAllOrganizations && allOrganizations.length === 0 && !isAllOrganizationsLoading && !allOrganizationsError) {
+                setIsAllOrganizationsLoading(true);
+                setAllOrganizationsError(null);
+                try {
+                    console.log("Fetching all Organizations...");
+                    const response = await axios.get(`${apiUrl}/api/organizations`); // Endpoint for organizations
+                    setAllOrganizations(response.data || []);
+                    console.log("All Organizations Response:", response.data);
+                } catch (err) {
+                    console.error('Ошибка при загрузке всех организаций:', err);
+                    setAllOrganizationsError(err.response?.data?.error || 'Не удалось загрузить общий список организаций.');
+                } finally {
+                    setIsAllOrganizationsLoading(false);
+                }
+            }
+        };
+        fetchAllOrganizations();
+    }, [showAllOrganizations, allOrganizations.length, isAllOrganizationsLoading, allOrganizationsError]);
+
 
     // Обработчики навигации и выхода (без изменений)
     const handleLogout = () => {
@@ -171,14 +235,11 @@ function User() {
 
     // --- Рендеринг ---
 
-    if (isLoading && !user) {
+    if (isLoading && user === null) {
         return <div className="loading">Загрузка данных пользователя...</div>;
     }
-    if (error && !isLoading && !user) { // Показываем общую ошибку, если нет пользователя
-        return <div className="error-container"><div className="error">{error}</div> <button onClick={() => navigate('/login')}>Войти</button></div>;
-    }
-    if (!user) {
-        return <div className="error-container"><div className="error">Не удалось загрузить данные пользователя.</div><button onClick={() => navigate('/login')}>Войти</button></div>;
+    if (!user && !isLoading) {
+        return <div className="error-container"><div className="error">{error || "Не удалось загрузить данные пользователя."}</div> <button onClick={() => navigate('/login')}>Войти</button></div>;
     }
 
     return (
@@ -200,10 +261,13 @@ function User() {
                 {/* Статус обучения по ККС (только для работников) - ТАБЛИЦА */}
                 {user?.role === 0 && (
                     <div className="user-kks-status-table">
-                        <h2>Статус обучения по ККС</h2>
+                        <h2>
+                            Статус обучения по ККС
+                            {/* {kksStatusLoadTime && <span className="load-time"> (Загружено за {kksStatusLoadTime} мс)</span>} Removed */}
+                        </h2>
                         {isLoading && <p>Загрузка статуса ККС...</p>}
-                        {/* Показываем ошибку загрузки ККС, если она не связана с отсутствием пользователя */}
-                        {error && !isLoading && <p className="error-message">Ошибка загрузки статуса ККС: {error}</p>}
+                        {error && user && <p className="error-message">Ошибка загрузки статуса ККС: {error}</p>}
+
 
                         {!isLoading && !error && kksStatus.length > 0 && (
                             <table className="kks-table">
@@ -234,15 +298,13 @@ function User() {
 
                                                         {/* Если обучение требуется (needsTraining === true), ДОПОЛНИТЕЛЬНО показываем кнопку ниже */}
                                                         {needsTraining && (
-                                                            <div style={{ marginTop: '5px' }}> {/* Добавляем небольшой отступ сверху для кнопки */}
+                                                            <div style={{ marginTop: '5px' }}>
                                                                 <button
                                                                     onClick={() => handleToggleRecommendations(kks.ID_KKS)}
                                                                     className="recommendation-toggle-button"
-                                                                    disabled={isCurrentRecLoading && isVisible} // Блокируем кнопку во время загрузки для этого ККС
+                                                                    disabled={isCurrentRecLoading && isVisible}
                                                                 >
-                                                                    {/* Меняем текст кнопки в зависимости от состояния */}
                                                                     {isVisible ? 'Скрыть программы' : 'Показать программы'}
-                                                                    {/* Можно добавить спиннер */}
                                                                     {isCurrentRecLoading && isVisible && '...'}
                                                                 </button>
                                                             </div>
@@ -252,10 +314,10 @@ function User() {
                                                 {/* --- Условный рендеринг рекомендаций ПОД строкой --- */}
                                                 {isVisible && (
                                                     <tr className="recommendations-row">
-                                                        {/* Объединяем ячейки для отображения рекомендаций */}
                                                         <td colSpan="3">
                                                             <div className="recommendations-details">
                                                                 {isCurrentRecLoading && <p>Загрузка рекомендуемых программ...</p>}
+                                                                {/* {recommendationsLoadTime && <span className="load-time"> (Загружено за {recommendationsLoadTime} мс)</span>} Removed */}
                                                                 {currentRecError && <p className="error-message">Ошибка: {currentRecError}</p>}
                                                                 {!isCurrentRecLoading && !currentRecError && (
                                                                     <>
@@ -292,16 +354,83 @@ function User() {
                                 </tbody>
                             </table>
                         )}
-                        {/* Сообщение, если ККС вообще нет */}
                         {!isLoading && !error && kksStatus.length === 0 && (
                             <p>Нет данных о прохождении обучения по ККС.</p>
                         )}
                     </div>
                 )}
 
-                {/* Убираем старые блоки уведомлений и рекомендаций */}
-                {/* {user?.role === 0 && kksNeedingTraining.length > 0 && (...) } */}
-                {/* {user?.role === 0 && (...) } */}
+                {/* --- Общий список критериев ККС (Убраны расчеты времени) --- */}
+                <div className="general-list-section">
+                    <h2>
+                        Общий список критериев ККС
+                        {/* {allKksLoadTime && <span className="load-time"> (Загружено за {allKksLoadTime} мс)</span>} Removed */}
+                    </h2>
+                    <button
+                        onClick={() => setShowAllKks(prev => !prev)}
+                        className="toggle-list-button"
+                    >
+                        {showAllKks ? 'Скрыть список ККС' : 'Показать список ККС'}
+                    </button>
+
+                    {showAllKks && (
+                        <div className="list-content">
+                            {isAllKksLoading && <p>Загрузка всех ККС...</p>}
+                            {allKksError && <p className="error-message">Ошибка: {allKksError}</p>}
+                            {!isAllKksLoading && !allKksError && (
+                                <>
+                                    {allKks.length > 0 ? (
+                                        <ul className="simple-list">
+                                            {allKks.map(kksItem => (
+                                                <li key={kksItem.ID_KKS}>
+                                                    <strong>{kksItem.Name_KKS}</strong> ({kksItem.SName_KKS})
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p>Общий список критериев ККС не найден.</p>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* --- Общий список ОРГАНИЗАЦИЙ (Изменено) --- */}
+                <div className="general-list-section">
+                    <h2>
+                        Общий список организаций
+                        {/* {allOrganizationsLoadTime && <span className="load-time"> (Загружено за {allOrganizationsLoadTime} мс)</span>} Removed */}
+                    </h2>
+                    <button
+                        onClick={() => setShowAllOrganizations(prev => !prev)}
+                        className="toggle-list-button"
+                    >
+                        {showAllOrganizations ? 'Скрыть список организаций' : 'Показать список организаций'}
+                    </button>
+
+                    {showAllOrganizations && (
+                        <div className="list-content">
+                            {isAllOrganizationsLoading && <p>Загрузка всех организаций...</p>}
+                            {allOrganizationsError && <p className="error-message">Ошибка: {allOrganizationsError}</p>}
+                            {!isAllOrganizationsLoading && !allOrganizationsError && (
+                                <>
+                                    {allOrganizations.length > 0 ? (
+                                        <ul className="simple-list">
+                                            {allOrganizations.map(org => (
+                                                <li key={org.ID_Org}>
+                                                    <strong>{org.FName}</strong> ({org.SName})
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p>Общий список организаций не найден.</p>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 {/* Кнопки действий (без изменений) */}
                 <div className="user-actions">

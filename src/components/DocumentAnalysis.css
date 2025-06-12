@@ -778,3 +778,65 @@
         font-size: 0.8em;
     }
 }
+
+/* DocumentAnalysis.css additions */
+
+.period-filter-container {
+    margin-top: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #f0f8ff; /* Light blue background */
+    padding: 10px 15px;
+    border-radius: 8px;
+    border: 1px solid #cceeff;
+}
+
+.period-filter-container label {
+    font-weight: bold;
+    color: #333;
+}
+
+.date-input {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1em;
+    flex-grow: 1; /* Allows inputs to grow */
+    max-width: 180px; /* Limit max width */
+}
+
+.period-filter-container span {
+    font-weight: bold;
+    color: #555;
+}
+
+.apply-filter-button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s ease;
+}
+
+.apply-filter-button:hover {
+    background-color: #0056b3;
+}
+
+/* Adjustments for charts and messages */
+.no-data-message {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+    font-style: italic;
+    background-color: #f7f7f7;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.full-width-message {
+    grid-column: 1 / -1; /* Make it span all columns in a grid */
+}

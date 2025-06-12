@@ -11,10 +11,9 @@ router.get('/', async (req, res) => {
             SELECT
                 p.ID_ProgDPO,
                 p.Name_ProgDPO,
-                t.Name_Type,
+                p.Type_ProgDPO,
                 o.FName AS OrgName
             FROM programdpo p
-            LEFT JOIN typedpo t ON p.id_type = t.id_type
             LEFT JOIN organization o ON p.ID_Org = o.ID_Org
             ORDER BY p.Name_ProgDPO;
         `;
@@ -40,18 +39,17 @@ router.get('/details/:programId', async (req, res) => {
                 o.ID_Org,
                 o.FName AS OrgFName,
                 o.SName AS OrgSName,
-                t.id_type,
-                t.Name_Type,
+                p.Type_ProgDPO, -- Changed from t.Name_Type and removed t.id_type
                 GROUP_CONCAT(DISTINCT k.ID_KKS ORDER BY k.ID_KKS SEPARATOR ', ') as KKS_Ids,
                 GROUP_CONCAT(DISTINCT k.name_kks ORDER BY k.name_kks SEPARATOR ', ') as KKS_Names,
                 GROUP_CONCAT(DISTINCT k.SName_KKS ORDER BY k.SName_KKS SEPARATOR ', ') as KKS_ShortNames
             FROM programdpo p
             JOIN organization o ON p.ID_Org = o.ID_Org
-            JOIN typedpo t ON p.id_type = t.id_type
+            -- Removed JOIN typedpo t ON p.id_type = t.id_type
             LEFT JOIN programpassport pp ON p.ID_ProgDPO = pp.ID_ProgDPO
             LEFT JOIN kks k ON pp.ID_KKS = k.ID_KKS
             WHERE p.ID_ProgDPO = ?
-            GROUP BY p.ID_ProgDPO, p.Name_ProgDPO, o.ID_Org, o.FName, o.SName, t.id_type, t.Name_Type
+            GROUP BY p.ID_ProgDPO, p.Name_ProgDPO, o.ID_Org, o.FName, o.SName, p.Type_ProgDPO
         `;
         const [rows] = await pool.query(query, [programId]);
         if (!rows || rows.length === 0) {
@@ -66,7 +64,7 @@ router.get('/details/:programId', async (req, res) => {
     }
 });
 
-
+/*
 // GET /api/programs/types - Получение типов программ
 router.get('/types', async (req, res) => {
     try {
@@ -77,6 +75,7 @@ router.get('/types', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при получении типов программ' });
     }
 });
+*/
 
 // GET /api/programs/recommended - Получение рекомендуемых программ
 router.get('/recommended', async (req, res) => {
@@ -96,11 +95,11 @@ router.get('/recommended', async (req, res) => {
                 p.Name_ProgDPO,
                 o.FName AS OrgFName,
                 o.SName AS OrgSName,
-                t.Name_Type
+                p.Type_ProgDPO -- Changed from t.Name_Type
             FROM programdpo p
             JOIN programpassport pp ON p.ID_ProgDPO = pp.ID_ProgDPO
             JOIN organization o ON p.ID_Org = o.ID_Org
-            JOIN typedpo t ON p.id_type = t.id_type
+            -- Removed JOIN typedpo t ON p.id_type = t.id_type
             WHERE pp.ID_KKS IN (?)
             ORDER BY p.Name_ProgDPO;
         `;
@@ -116,42 +115,66 @@ router.get('/recommended', async (req, res) => {
 // PUT /api/programs/:id - Обновление программы
 router.put('/:id', async (req, res) => {
     const programId = req.params.id;
-    const { Name_ProgDPO } = req.body; // Обновляем только имя
-    if (!Name_ProgDPO) {
-        return res.status(400).json({ error: 'Отсутствуют необходимые поля для обновления программы' });
+    const { Name_ProgDPO, Type_ProgDPO, ID_Org } = req.body; // Added Type_ProgDPO, ID_Org
+    
+    // Build update query dynamically
+    const updates = [];
+    const params = [];
+
+    if (Name_ProgDPO !== undefined) {
+        updates.push('Name_ProgDPO = ?');
+        params.push(Name_ProgDPO);
     }
+    if (Type_ProgDPO !== undefined) {
+        updates.push('Type_ProgDPO = ?'); // Use Type_ProgDPO
+        params.push(Type_ProgDPO);
+    }
+    if (ID_Org !== undefined) {
+        updates.push('ID_Org = ?');
+        params.push(ID_Org);
+    }
+
+    if (updates.length === 0) {
+        return res.status(400).json({ error: 'Нет полей для обновления программы' });
+    }
+
+    params.push(programId); // Add ID for WHERE clause
+
     try {
-        const updateQuery = 'UPDATE programdpo SET Name_ProgDPO = ? WHERE ID_ProgDPO = ?';
-        const [result] = await pool.query(updateQuery, [Name_ProgDPO, programId]);
+        const updateQuery = `UPDATE programdpo SET ${updates.join(', ')} WHERE ID_ProgDPO = ?`;
+        const [result] = await pool.query(updateQuery, params);
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Программа с указанным ID не найдена' });
         }
         res.json({ message: 'Программа успешно обновлена' });
     } catch (err) {
         console.error(`Ошибка при обновлении программы ${programId}:`, err);
+        if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+             return res.status(400).json({ error: 'Указанная Организация не существует' });
+        }
         res.status(500).json({ error: 'Ошибка сервера при обновлении программы' });
     }
 });
 
 // POST /api/programs - Добавление новой программы
 router.post('/', async (req, res) => {
-    const { Name_ProgDPO, id_type, ID_Org } = req.body;
-    if (!Name_ProgDPO || id_type === undefined || ID_Org === undefined) {
+    const { Name_ProgDPO, Type_ProgDPO, ID_Org } = req.body; // Changed id_type to Type_ProgDPO
+    if (!Name_ProgDPO || Type_ProgDPO === undefined || ID_Org === undefined) {
         return res.status(400).json({ error: 'Необходимо указать Название, Тип и Организацию для программы' });
     }
     try {
-        const insertQuery = 'INSERT INTO programdpo (Name_ProgDPO, id_type, ID_Org) VALUES (?, ?, ?)';
-        const [result] = await pool.query(insertQuery, [Name_ProgDPO, id_type, ID_Org]);
+        const insertQuery = 'INSERT INTO programdpo (Name_ProgDPO, Type_ProgDPO, ID_Org) VALUES (?, ?, ?)'; // Changed id_type to Type_ProgDPO
+        const [result] = await pool.query(insertQuery, [Name_ProgDPO, Type_ProgDPO, ID_Org]);
         const insertId = result.insertId;
         const [newProgram] = await pool.query(
-            `SELECT p.ID_ProgDPO, p.Name_ProgDPO, t.Name_Type, p.ID_Org, p.id_type FROM programdpo p LEFT JOIN typedpo t ON p.id_type = t.id_type WHERE p.ID_ProgDPO = ?`,
+            `SELECT p.ID_ProgDPO, p.Name_ProgDPO, p.Type_ProgDPO, p.ID_Org FROM programdpo p WHERE p.ID_ProgDPO = ?`, // Changed t.Name_Type and removed p.id_type, removed LEFT JOIN typedpo
             [insertId]
         );
         res.status(201).json(newProgram[0] || { id: insertId });
     } catch (err) {
         console.error('Ошибка при добавлении программы:', err);
         if (err.code === 'ER_NO_REFERENCED_ROW_2') {
-            return res.status(400).json({ error: 'Указанный Тип или Организация не существуют' });
+            return res.status(400).json({ error: 'Указанная Организация не существует' });
         }
         res.status(500).json({ error: 'Ошибка сервера при добавлении программы' });
     }
@@ -175,6 +198,5 @@ router.delete('/:id', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера при удалении программы' });
     }
 });
-
 
 module.exports = router;

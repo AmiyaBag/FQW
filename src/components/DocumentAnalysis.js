@@ -14,6 +14,10 @@ import {
 import { Bar } from 'react-chartjs-2';
 import './DocumentAnalysis.css'; // Make sure this CSS file exists and is styled appropriately
 
+// Import jsPDF and html2canvas
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
 const apiUrl = process.env.REACT_APP_API_URL
 
 // Set the app element for react-modal accessibility
@@ -40,7 +44,12 @@ function DocumentAnalysis() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedDocumentForModal, setSelectedDocumentForModal] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: 'DateIssue', direction: 'descending' }); // Added sort state
-    
+
+    // --- NEW STATES FOR PERIOD FILTERING ---
+    const [startDate, setStartDate] = useState(''); // Stores date in YYYY-MM-DD format
+    const [endDate, setEndDate] = useState(''); // Stores date in YYYY-MM-DD format
+    // --- END NEW STATES ---
+
     // Hooks
     const navigate = useNavigate();
     const user = JSON.parse(localStorage.getItem('user')); // Assuming user info is stored here
@@ -57,7 +66,7 @@ function DocumentAnalysis() {
     // Helper function to sort documents
     const sortDocuments = (docs, config) => {
         if (!config.key) return docs;
-        
+
         return [...docs].sort((a, b) => {
             // Handle date fields specially
             if (['DateIssue', 'DataStart', 'DataEnd'].includes(config.key)) {
@@ -71,14 +80,14 @@ function DocumentAnalysis() {
                 }
                 return 0;
             }
-            
+
             // Handle numeric fields
             if (['ID_Document', 'ID_Worker', 'ID_ProgDPO'].includes(config.key)) {
                 const valA = a[config.key] || 0;
                 const valB = b[config.key] || 0;
                 return config.direction === 'ascending' ? valA - valB : valB - valA;
             }
-            
+
             // Handle string fields
             const valA = String(a[config.key] || '').toLowerCase();
             const valB = String(b[config.key] || '').toLowerCase();
@@ -94,12 +103,12 @@ function DocumentAnalysis() {
 
     // Render sortable header
     const renderSortableHeader = (label, key) => (
-        <th 
-            onClick={() => requestSort(key)} 
+        <th
+            onClick={() => requestSort(key)}
             className="sortable-header"
             style={{ cursor: 'pointer' }}
         >
-            {label} 
+            {label}
             {sortConfig.key === key ? (
                 sortConfig.direction === 'ascending' ? ' ▲' : ' ▼'
             ) : ' ↕'}
@@ -132,10 +141,9 @@ function DocumentAnalysis() {
                 }
                 setDocuments(documentsResponse.data);
                 console.log("Frontend: Documents received:", documentsResponse.data.length);
-                 if (documentsResponse.data.length > 0) {
-                     // Log the structure of KKS_Data for the first doc for verification
-                     console.log("Frontend: Sample KKS_Data in first doc:", documentsResponse.data[0]?.KKS_Data);
-                 }
+                if (documentsResponse.data.length > 0) {
+                    console.log("Frontend: Sample KKS_Data in first doc:", documentsResponse.data[0]?.KKS_Data);
+                }
 
                 // Fetch workers list if the user is an admin (role === 1)
                 if (user.role === 1) {
@@ -143,16 +151,15 @@ function DocumentAnalysis() {
 
                     // Validate workers response
                     if (!Array.isArray(workersResponse.data)) {
-                         console.error("Workers API did not return an array:", workersResponse.data);
-                         setWorkers([]); // Set empty array on error
+                        console.error("Workers API did not return an array:", workersResponse.data);
+                        setWorkers([]); // Set empty array on error
                     } else {
                         setWorkers(workersResponse.data);
                         // Set the initial selected worker ONLY if workers exist and NO worker is currently selected
-                        // This prevents resetting selection if the component re-renders for other reasons
                         if (workersResponse.data.length > 0 && selectedWorker === null) {
                             setSelectedWorker(workersResponse.data[0].ID_Worker);
                         } else if (workersResponse.data.length === 0) {
-                             setSelectedWorker(null); // No workers available
+                            setSelectedWorker(null); // No workers available
                         }
                     }
                 } else {
@@ -177,10 +184,7 @@ function DocumentAnalysis() {
             // Optional: Redirect to login
             // navigate('/login');
         }
-        // Dependency array includes user info and selectedWorker (to potentially refetch if admin changes worker, though filtering handles display)
-        // Note: Adding selectedWorker here caused a re-fetch loop in v1 - be careful. Let's keep it based on user info for initial load.
-        // Re-filtering happens via useMemo when selectedWorker changes.
-    }, [user?.workerId, user?.role]); // Re-run effect if user ID or role changes
+    }, [user?.workerId, user?.role, selectedWorker]); // Added selectedWorker to dependency to ensure worker list updates correctly on initial load if needed, and to avoid stale closure for initial setSelectedWorker.
 
 
     // --- Event Handlers ---
@@ -196,7 +200,6 @@ function DocumentAnalysis() {
 
     const handleWorkerChange = (event) => {
         const workerIdValue = event.target.value;
-        // Parse to integer, handle potential empty string value from a "--Select--" option
         const workerId = workerIdValue ? parseInt(workerIdValue, 10) : null;
         setSelectedWorker(workerId);
     };
@@ -217,30 +220,51 @@ function DocumentAnalysis() {
         setSelectedDocumentForModal(null); // Clear selected doc when closing
     };
 
-    // --- Filtered Documents (Memoized) ---
+    // --- Filtered Documents (Memoized) - Now includes date range filter ---
     const filteredDocuments = useMemo(() => {
         if (loading || !Array.isArray(documents)) return [];
-    
+
         let filtered = documents;
+
+        // Filter by worker for admin role
         if (user?.role === 1) {
             filtered = selectedWorker !== null
                 ? documents.filter(doc => doc.ID_Worker === selectedWorker)
                 : [];
         }
-        
+
+        // --- NEW: Filter by DateRange ---
+        const start = startDate ? new Date(startDate) : null;
+        const end = endDate ? new Date(endDate) : null;
+
+        if (start && !isNaN(start.getTime())) {
+            filtered = filtered.filter(doc => {
+                const docDate = new Date(doc.DateIssue);
+                // Compare only date parts, ignore time for 'date' type inputs
+                return docDate.setHours(0,0,0,0) >= start.setHours(0,0,0,0);
+            });
+        }
+        if (end && !isNaN(end.getTime())) {
+            filtered = filtered.filter(doc => {
+                const docDate = new Date(doc.DateIssue);
+                // Compare only date parts, ignore time for 'date' type inputs
+                return docDate.setHours(0,0,0,0) <= end.setHours(0,0,0,0);
+            });
+        }
+        // --- END NEW ---
+
         return sortDocuments(filtered, sortConfig);
-    }, [documents, selectedWorker, user?.role, loading, sortConfig]);
+    }, [documents, selectedWorker, user?.role, loading, sortConfig, startDate, endDate]); // Add startDate, endDate dependencies
 
     // --- Chart Data Preparation Functions (Memoized with useCallback) ---
 
-    // 1. Yearly & Cumulative Chart Data
-    const prepareYearlyChartData = useCallback((docs) => {
-        const documentsByYear = docs.reduce((acc, doc) => {
+    // 1. Yearly & Cumulative Chart Data - Now receives filtered documents
+    const prepareYearlyChartData = useCallback((docsToAnalyze) => {
+        const documentsByYear = docsToAnalyze.reduce((acc, doc) => {
             try {
-                // Ensure DateIssue exists and is a valid date string
                 if (doc.DateIssue) {
                     const date = new Date(doc.DateIssue);
-                    if (!isNaN(date.getTime())) { // Check if date is valid
+                    if (!isNaN(date.getTime())) {
                         const year = date.getFullYear();
                         acc[year] = (acc[year] || 0) + 1;
                     } else {
@@ -261,94 +285,81 @@ function DocumentAnalysis() {
         const minDataYear = yearsInData.length > 0 ? Math.min(...yearsInData) : currentYear;
         const maxDataYear = yearsInData.length > 0 ? Math.max(...yearsInData) : currentYear;
 
-        // Determine the range of years for the chart (from earliest data year to at least the current year)
         const startYear = minDataYear;
         const endYear = Math.max(maxDataYear, currentYear);
 
         const allYears = [];
-        // Populate all years in the range
         if (startYear <= endYear) {
             for (let year = startYear; year <= endYear; year++) {
                 allYears.push(year);
             }
-        } else if (docs.length === 0) { // Handle case with no documents - maybe show current year?
+        } else if (docsToAnalyze.length === 0) {
             // Optionally add current year: allYears.push(currentYear);
         }
 
-        // Map counts for each year in the final range
         const counts = allYears.map(year => documentsByYear[year] || 0);
 
-        // Calculate cumulative counts
         const cumulativeCounts = counts.reduce((acc, count, index) => {
             acc.push(index === 0 ? count : (acc[index - 1] || 0) + count);
             return acc;
         }, []);
 
         return { years: allYears, counts, cumulativeCounts };
-    }, []); // useCallback as the function definition itself doesn't depend on props/state
+    }, []); // No dependencies for the function definition itself
 
-    // 2. KKS Criteria Chart Data (Processing KKS_Data array)
-    const prepareKKSChartData = useCallback((docs) => {
-        // Aggregate counts per KKS criterion (using shortName as key)
-        const kksAggregated = docs.reduce((acc, doc) => {
-            const kksItems = doc.KKS_Data; // Expecting an array like [{ shortName: '..', fullName: '..' }, ...]
+    // 2. KKS Criteria Chart Data (Processing KKS_Data array) - Now receives filtered documents
+    const prepareKKSChartData = useCallback((docsToAnalyze) => {
+        const kksAggregated = docsToAnalyze.reduce((acc, doc) => {
+            const kksItems = doc.KKS_Data;
 
-            // Check if kksItems is a valid array
             if (Array.isArray(kksItems)) {
                 kksItems.forEach(item => {
-                    const shortName = item?.shortName?.trim(); // Use optional chaining and trim
+                    const shortName = item?.shortName?.trim();
                     const fullName = item?.fullName?.trim();
 
-                    if (shortName) { // Process only if shortName exists
+                    if (shortName) {
                         if (!acc[shortName]) {
-                            // Initialize entry for this shortName if it's the first time seen
                             acc[shortName] = {
                                 shortName: shortName,
-                                fullName: fullName || shortName, // Use shortName as fallback if fullName is missing
+                                fullName: fullName || shortName,
                                 count: 0
                             };
                         }
-                        // Increment the count for this KKS criterion
                         acc[shortName].count += 1;
                     } else {
-                         console.warn("KKS item missing shortName in doc:", doc.ID_Document, item);
+                        console.warn("KKS item missing shortName in doc:", doc.ID_Document, item);
                     }
                 });
             } else if (kksItems) {
-                 // Log if KKS_Data exists but isn't an array (should be handled by backend ideally)
-                 console.error("KKS_Data is not an array for doc:", doc.ID_Document, kksItems);
+                console.error("KKS_Data is not an array for doc:", doc.ID_Document, kksItems);
             }
-            // If KKS_Data is null/undefined or invalid, just skip and continue
 
             return acc;
-        }, {}); // Initial value is an empty object
+        }, {});
 
-        // Sort aggregated data by shortName for consistent chart axis order
         const sortedShortNames = Object.keys(kksAggregated).sort((a, b) => a.localeCompare(b));
 
-        // Extract data arrays needed for Chart.js
-        const labels = sortedShortNames; // X-axis labels will be the Short Names
-        const fullNames = sortedShortNames.map(key => kksAggregated[key].fullName); // Full Names for tooltips
-        const counts = sortedShortNames.map(key => kksAggregated[key].count); // Bar heights
+        const labels = sortedShortNames;
+        const fullNames = sortedShortNames.map(key => kksAggregated[key].fullName);
+        const counts = sortedShortNames.map(key => kksAggregated[key].count);
 
-        console.log("Prepared KKS Chart Data:", { labels, fullNames, counts }); // Log for debugging
+        console.log("Prepared KKS Chart Data:", { labels, fullNames, counts });
 
         return {
-            labels: labels,       // Short names for axis
-            fullNames: fullNames, // Full names for tooltips
-            counts: counts        // Counts for bar heights
+            labels: labels,
+            fullNames: fullNames,
+            counts: counts
         };
-    }, []); // useCallback as the function definition is stable
+    }, []);
 
-    // --- Memoized Chart Results ---
-    // These recalculate only when filteredDocuments or the prep function changes (which it won't due to useCallback)
+    // --- Memoized Chart Results (now depend on filteredDocuments) ---
     const yearlyChartResult = useMemo(() => prepareYearlyChartData(filteredDocuments), [filteredDocuments, prepareYearlyChartData]);
     const kksChartResult = useMemo(() => prepareKKSChartData(filteredDocuments), [filteredDocuments, prepareKKSChartData]);
 
     // --- Расчет коэффициента K ---
     const calculateK = useCallback((cumulativeCounts) => {
         if (!Array.isArray(cumulativeCounts) || cumulativeCounts.length < 2) return 0;
-        
+
         let K = 0;
         for (let i = 1; i < cumulativeCounts.length; i++) {
             const diff = cumulativeCounts[i] - cumulativeCounts[i-1];
@@ -373,7 +384,7 @@ function DocumentAnalysis() {
             borderColor: 'rgba(54, 162, 235, 1)',
             borderWidth: 1,
         }],
-    }), [yearlyChartResult, user.role, getWorkerName]); // Update when results or worker name changes
+    }), [yearlyChartResult, user.role]); // Removed getWorkerName from here, as the chart title now incorporates worker name based on commonOptions
 
     const cumulativeData = useMemo(() => ({
         labels: yearlyChartResult.years,
@@ -384,7 +395,7 @@ function DocumentAnalysis() {
             borderColor: 'rgba(75, 192, 192, 1)',
             borderWidth: 1,
         }],
-    }), [yearlyChartResult, user.role, getWorkerName]); // Update when results or worker name changes
+    }), [yearlyChartResult, user.role]); // Removed getWorkerName
 
     const kksData = useMemo(() => ({
         labels: kksChartResult.labels, // Use SHORT names for axis labels
@@ -395,53 +406,53 @@ function DocumentAnalysis() {
             borderColor: 'rgba(255, 159, 64, 1)',
             borderWidth: 1,
         }],
-    }), [kksChartResult, user.role, getWorkerName]); // Update when KKS results or worker name changes
+    }), [kksChartResult, user.role]); // Removed getWorkerName
 
     // --- Chart Options (Memoized) ---
 
     // Generator for common options
-     const commonOptions = useMemo(() => (titleText, xAxisText) => ({
-         responsive: true,
-         maintainAspectRatio: false, // Allow chart to fill container height
-         plugins: {
-             legend: {
-                 position: 'top', // Position legend at the top
-             },
-             title: {
-                 display: true,
-                 text: titleText, // Dynamic title
-                 font: { size: 16 }, // Set title font size
-             },
-             tooltip: { // Base tooltip configuration
-                 mode: 'index', // Show tooltips for all datasets at that index
-                 intersect: false, // Tooltip appears even if not directly hovering over the bar
-             }
-         },
-         scales: {
-             x: { // X-axis configuration
-                 title: {
-                     display: true,
-                     text: xAxisText, // Dynamic X-axis label
-                 },
-                 ticks: {
-                     autoSkip: true, // Automatically skip labels if they overlap
-                     maxRotation: 45, // Max rotation for labels
-                     minRotation: 0 // Min rotation
-                 }
-             },
-             y: { // Y-axis configuration
-                 beginAtZero: true, // Start Y-axis at 0
-                 title: {
-                     display: true,
-                     text: 'Количество документов', // Y-axis label
-                 },
-                 ticks: {
-                      // Ensure integer ticks for document counts
-                     precision: 0
-                 }
-             },
-         },
-     }), []); // No dependencies for the function generator itself
+    const commonOptions = useMemo(() => (titleText, xAxisText) => ({
+        responsive: true,
+        maintainAspectRatio: false, // Allow chart to fill container height
+        plugins: {
+            legend: {
+                position: 'top', // Position legend at the top
+            },
+            title: {
+                display: true,
+                text: titleText, // Dynamic title
+                font: { size: 16 }, // Set title font size
+            },
+            tooltip: { // Base tooltip configuration
+                mode: 'index', // Show tooltips for all datasets at that index
+                intersect: false, // Tooltip appears even if not directly hovering over the bar
+            }
+        },
+        scales: {
+            x: { // X-axis configuration
+                title: {
+                    display: true,
+                    text: xAxisText, // Dynamic X-axis label
+                },
+                ticks: {
+                    autoSkip: true, // Automatically skip labels if they overlap
+                    maxRotation: 45, // Max rotation for labels
+                    minRotation: 0 // Min rotation
+                }
+            },
+            y: { // Y-axis configuration
+                beginAtZero: true, // Start Y-axis at 0
+                title: {
+                    display: true,
+                    text: 'Количество документов', // Y-axis label
+                },
+                ticks: {
+                    // Ensure integer ticks for document counts
+                    precision: 0
+                }
+            },
+        },
+    }), []); // No dependencies for the function generator itself
 
     // Specific options for each chart using the common generator
     const yearlyOptions = useMemo(() => commonOptions(
@@ -493,18 +504,72 @@ function DocumentAnalysis() {
 
 
     // --- Helper Function: Format Date (Memoized) ---
-     const formatDate = useCallback((dateString) => {
-         if (!dateString) return 'N/A'; // Handle null or empty date strings
-         try {
-             const date = new Date(dateString);
-             // Check if the date object is valid
-             return isNaN(date.getTime()) ? 'Неверная дата' : date.toLocaleDateString('ru-RU'); // Use Russian locale for DD.MM.YYYY
-         } catch (e) {
-             console.error("Error formatting date:", dateString, e);
-             return 'Ошибка даты'; // Return error string if parsing fails
-         }
-     }, []); // No dependencies needed
+    const formatDate = useCallback((dateString) => {
+        if (!dateString) return 'N/A'; // Handle null or empty date strings
+        try {
+            const date = new Date(dateString);
+            // Check if the date object is valid
+            return isNaN(date.getTime()) ? 'Неверная дата' : date.toLocaleDateString('ru-RU'); // Use Russian locale for DD.MM.YYYY
+        } catch (e) {
+            console.error("Error formatting date:", dateString, e);
+            return 'Ошибка даты'; // Return error string if parsing fails
+        }
+    }, []); // No dependencies needed
 
+    // --- NEW: handleDownloadReport function ---
+    const handleDownloadReport = async () => {
+        // Only allow download if user is admin and a worker is selected
+        if (user?.role !== 1 || selectedWorker === null) {
+            alert('Для скачивания отчета выберите работника.');
+            return;
+        }
+
+        setLoading(true); // Indicate loading for PDF generation
+        const input = document.getElementById('report-table'); // Get the table element by ID
+
+        if (!input) {
+            setError('Ошибка: таблица отчета не найдена для экспорта.');
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const canvas = await html2canvas(input, {
+                scale: 2, // Increase scale for better resolution
+                useCORS: true, // If your images/assets are from different origins
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4'); // 'p' for portrait, 'mm' for units, 'a4' for paper size
+
+            const imgWidth = 210; // A4 width in mm
+            const pageHeight = 297; // A4 height in mm
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+            }
+
+            const workerName = getWorkerName();
+            const fileName = `Отчет_${workerName.replace(/\s/g, '_')}_${startDate}_${endDate}.pdf`;
+            pdf.save(fileName);
+
+        } catch (err) {
+            console.error("Ошибка при генерации PDF:", err);
+            setError('Не удалось сгенерировать PDF-отчет. Пожалуйста, попробуйте еще раз.');
+        } finally {
+            setLoading(false);
+        }
+    };
+    // --- END NEW ---
 
     // --- Rendering Logic ---
 
@@ -515,12 +580,9 @@ function DocumentAnalysis() {
     if (error) return (
         <div className="error-container">
             <div className="error">{error}</div>
-            {/* Provide buttons even on error */}
-             <div className="header-buttons" style={{ justifyContent: 'center', marginTop: '20px' }}>
-                 <button onClick={handleBack} className="back-button">Назад</button>
-                  {/* Optionally show logout even on error */}
-                 {/* <button onClick={handleLogout} className="logout-button">Выйти</button> */}
-             </div>
+            <div className="header-buttons" style={{ justifyContent: 'center', marginTop: '20px' }}>
+                <button onClick={handleBack} className="back-button">Назад</button>
+            </div>
         </div>
     );
 
@@ -540,30 +602,49 @@ function DocumentAnalysis() {
             {user?.role === 1 && (
                 <div className="controls-container">
                     {/* Worker Selector Dropdown */}
-                     {workers.length > 0 ? (
-                         <div className="worker-selector">
-                             <label htmlFor="worker-select">Работник:</label>
-                             <select
-                                 id="worker-select"
-                                 value={selectedWorker ?? ''} // Controlled component value, handle null state
-                                 onChange={handleWorkerChange}
-                                 className="worker-select"
-                                 disabled={loading} // Disable while loading (though loading screen handles this mostly)
-                             >
-                                  {/* Optional: Default unselectable option */}
-                                 {/* <option value="" disabled>-- Выберите работника --</option> */}
-                                 {workers.map(worker => (
-                                     <option key={worker.ID_Worker} value={worker.ID_Worker}>
-                                         {/* Display worker name - ensure FName_Worker or similar exists */}
-                                         {worker.FName_Worker || `ID: ${worker.ID_Worker}`}
-                                     </option>
-                                 ))}
-                             </select>
-                         </div>
-                     ) : (
-                          // Message if workers list couldn't be loaded or is empty
-                         <p className="no-workers-message">Список работников не загружен или пуст.</p>
-                     )}
+                    {workers.length > 0 ? (
+                        <div className="worker-selector">
+                            <label htmlFor="worker-select">Работник:</label>
+                            <select
+                                id="worker-select"
+                                value={selectedWorker ?? ''}
+                                onChange={handleWorkerChange}
+                                className="worker-select"
+                                disabled={loading}
+                            >
+                                {workers.map(worker => (
+                                    <option key={worker.ID_Worker} value={worker.ID_Worker}>
+                                        {worker.FName_Worker || `ID: ${worker.ID_Worker}`}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    ) : (
+                        <p className="no-workers-message">Список работников не загружен или пуст.</p>
+                    )}
+
+                    {/* --- NEW: Period Filter for Admin --- */}
+                    {selectedWorker !== null && (
+                        <div className="period-filter-container">
+                            <label htmlFor="start-date">Период оценки K:</label>
+                            <input
+                                type="date"
+                                id="start-date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="date-input"
+                            />
+                            <span>—</span>
+                            <input
+                                type="date"
+                                id="end-date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="date-input"
+                            />
+                        </div>
+                    )}
+                    {/* --- END NEW --- */}
 
                     {/* View Mode Toggle Buttons (Show only if a worker is selected) */}
                     {selectedWorker !== null && (
@@ -571,22 +652,33 @@ function DocumentAnalysis() {
                             <button
                                 className={`view-mode-button ${viewMode === 'analysis' ? 'active' : ''}`}
                                 onClick={() => handleViewModeChange('analysis')}
-                                aria-pressed={viewMode === 'analysis'} // Accessibility
+                                aria-pressed={viewMode === 'analysis'}
                             >
                                 Анализ (Графики)
                             </button>
                             <button
                                 className={`view-mode-button ${viewMode === 'documents' ? 'active' : ''}`}
                                 onClick={() => handleViewModeChange('documents')}
-                                aria-pressed={viewMode === 'documents'} // Accessibility
+                                aria-pressed={viewMode === 'documents'}
                             >
                                 Документы (Список)
                             </button>
+                            {/* --- NEW: Download Report Button (visible when in 'documents' view) --- */}
+                            {viewMode === 'documents' && filteredDocuments.length > 0 && (
+                                <button
+                                    onClick={handleDownloadReport}
+                                    className="download-report-button"
+                                    disabled={loading} // Disable during PDF generation
+                                >
+                                    {loading ? 'Генерация PDF...' : 'Скачать Отчет (PDF)'}
+                                </button>
+                            )}
+                            {/* --- END NEW --- */}
                         </div>
                     )}
-                     {selectedWorker === null && workers.length > 0 && (
-                          <p className="select-worker-prompt">Выберите работника для просмотра данных.</p>
-                     )}
+                    {selectedWorker === null && workers.length > 0 && (
+                        <p className="select-worker-prompt">Выберите работника для просмотра данных.</p>
+                    )}
                 </div>
             )}
 
@@ -605,92 +697,132 @@ function DocumentAnalysis() {
                             </div>
                         </div>
 
-                        {/* Conditional Rendering based on whether there are documents to display */}
-                         {(user.role !== 1 || selectedWorker !== null) && filteredDocuments.length > 0 ? (
-                             <>
-                                 {/* Yearly Chart */}
-                                 <div className="chart-wrapper">
-                                      {yearlyChartResult.years.length > 0 ? (
-                                          <Bar options={yearlyOptions} data={yearlyData} />
-                                      ) : (
-                                          <p className="no-data-message">Нет данных по годам.</p>
-                                      )}
-                                 </div>
-                                 {/* Cumulative Chart */}
-                                 <div className="chart-wrapper">
-                                      {yearlyChartResult.years.length > 0 ? (
-                                          <Bar options={cumulativeOptions} data={cumulativeData} />
-                                      ) : (
-                                            <p className="no-data-message">Нет данных по годам.</p> // Redundant but harmless
-                                      )}
-                                 </div>
-                                 {/* KKS Chart (Takes full width potentially on smaller screens, adjust CSS needed) */}
-                                 <div className="chart-wrapper kks-chart-wrapper">
-                                     {/* Check if there are KKS labels to display */}
-                                      {kksChartResult.labels.length > 0 ? (
-                                          <Bar options={kksOptions} data={kksData} />
-                                      ) : (
-                                          <p className="no-data-message">Нет данных по критериям ККС для отображения.</p>
-                                      )}
-                                 </div>
-                             </>
-                         ) : (
-                             // Message when no documents are available for the current view/filter
-                             <div className="no-data-message full-width-message">
-                                 {user.role === 1 ?
-                                     (selectedWorker === null ? "Пожалуйста, выберите работника для просмотра анализа." : `Нет документов для анализа у выбранного работника (${getWorkerName()}).`) :
-                                     "У вас пока нет загруженных документов для анализа."
-                                 }
-                             </div>
-                         )}
+                        {(user.role !== 1 || selectedWorker !== null) && filteredDocuments.length > 0 ? (
+                            <>
+                                {/* Yearly Chart */}
+                                <div className="chart-wrapper">
+                                    {yearlyChartResult.years.length > 0 ? (
+                                        <Bar options={yearlyOptions} data={yearlyData} />
+                                    ) : (
+                                        <p className="no-data-message">Нет данных по годам за выбранный период.</p>
+                                    )}
+                                </div>
+                                {/* Cumulative Chart */}
+                                <div className="chart-wrapper">
+                                    {yearlyChartResult.years.length > 0 ? (
+                                        <Bar options={cumulativeOptions} data={cumulativeData} />
+                                    ) : (
+                                        <p className="no-data-message">Нет данных по годам за выбранный период.</p>
+                                    )}
+                                </div>
+                                {/* KKS Chart */}
+                                <div className="chart-wrapper kks-chart-wrapper">
+                                    {kksChartResult.labels.length > 0 ? (
+                                        <Bar options={kksOptions} data={kksData} />
+                                    ) : (
+                                        <p className="no-data-message">Нет данных по критериям ККС для отображения за выбранный период.</p>
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="no-data-message full-width-message">
+                                {user.role === 1 ?
+                                    (selectedWorker === null ? "Пожалуйста, выберите работника для просмотра анализа." : `Нет документов для анализа у выбранного работника (${getWorkerName()}) за выбранный период.`) :
+                                    "У вас пока нет загруженных документов для анализа за выбранный период."
+                                }
+                            </div>
+                        )}
                     </div>
                 ) : (
                     // --- Documents View (Table) ---
-                     <div className="documents-list">
-                         {/* Conditional Rendering for the table */}
-                          {(user.role !== 1 || selectedWorker !== null) && filteredDocuments.length > 0 ? (
-                              <table className="documents-table">
-                                  <thead>
+                    <div className="documents-list">
+                        {(user.role !== 1 || selectedWorker !== null) && filteredDocuments.length > 0 ? (
+                            <table className="documents-table" id="report-table"> {/* ADDED ID HERE */}
+                                <thead>
                                     <tr>
-                                        {/* Show Worker column only for Admin */}
+                                        {/* NEW: Add FIO and Doljnost for Admin Report */}
+                                        {user?.role === 1 && (
+                                            <>
+                                                <th>ФИО Работника</th>
+                                                <th>Должность</th>
+                                            </>
+                                        )}
                                         {renderSortableHeader('Программа обучения', 'ProgramName')}
                                         {renderSortableHeader('Организация', 'OrgSName')}
                                         {renderSortableHeader('Рег. номер', 'regnumber')}
                                         {renderSortableHeader('Дата выдачи', 'DateIssue')}
+                                        {/* NEW: Last DOC Date (Green/Red), PK, PP, KKS Coeff */}
+                                        <th>Дата посл. ДОК</th>
+                                        <th>Повышения квалификации (ПК)</th>
+                                        <th>Проф. переподготовки (ПП)</th>
+                                        <th>KКС</th>
                                         <th>Действия</th>
                                     </tr>
-                                  </thead>
-                                  <tbody>
-                                      {filteredDocuments.map((doc) => (
-                                          <tr key={doc.ID_Document}>
-                                              {/* Document Details cells */}
-                                              <td>{doc.ProgramName || 'N/A'}</td>
-                                              <td>{doc.OrgSName || doc.OrgFName || 'N/A'}</td> {/* Display Short name, fallback to Full */}
-                                              <td>{doc.regnumber || 'N/A'}</td>
-                                              <td>{formatDate(doc.DateIssue)}</td> {/* Use formatted date */}
-                                              <td>
-                                                  {/* Button to open the modal */}
-                                                  <button
-                                                      className="details-button"
-                                                      onClick={() => openModal(doc)} // Pass the whole document object
-                                                  >
-                                                      Дополнительно
-                                                  </button>
-                                              </td>
-                                          </tr>
-                                      ))}
-                                  </tbody>
-                              </table>
-                          ) : (
-                              // Message when no documents are available for the table view
-                              <div className="no-data-message full-width-message">
-                                  {user.role === 1 ?
-                                      (selectedWorker === null ? "Пожалуйста, выберите работника для просмотра списка документов." : `Нет документов для отображения у выбранного работника (${getWorkerName()}).`) :
-                                      "У вас пока нет загруженных документов."
-                                  }
-                              </div>
-                          )}
-                     </div>
+                                </thead>
+                                <tbody>
+                                    {/* Prepare data for the report table */}
+                                    {filteredDocuments.map((doc) => {
+                                        const workerInfo = workers.find(w => w.ID_Worker === doc.ID_Worker);
+                                        const FIO = workerInfo ? workerInfo.FName_Worker : 'N/A';
+                                        const Doljnost = workerInfo ? workerInfo.Post_Worker : 'N/A'; // Assuming Post_Worker exists
+
+                                        // Calculate Last DOC Date (Green/Red)
+                                        const lastDocDate = doc.DateIssue; // Or the actual last DOC date for the worker in the filtered period
+                                        const threeYearsAgo = new Date();
+                                        threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+                                        const isLastDocValid = lastDocDate ? new Date(lastDocDate) >= threeYearsAgo : false;
+                                        const lastDocColor = isLastDocValid ? 'green' : 'red';
+
+                                        // Calculate PK and PP for the period (assuming you have this data or need to aggregate)
+                                        // For simplicity, let's count docs by Type_ProgDPO for the current worker and period
+                                        const pkCount = filteredDocuments.filter(d => d.ID_Worker === doc.ID_Worker && d.Type_ProgDPO === 'Повышение квалификации').length;
+                                        const ppCount = filteredDocuments.filter(d => d.ID_Worker === doc.ID_Worker && d.Type_ProgDPO === 'Профессиональная переподготовка').length;
+
+                                        // KKS Coefficient for this worker and period (reuse your kCoefficient logic if needed per worker)
+                                        // For a full report table, you might need to calculate K for each worker individually if the current kCoefficient is global
+                                        // For now, let's just display the global K. To make it per-worker, you'd need to pre-process `documents` to group by worker.
+                                        // A simpler approach for the table is to just show the K for the currently selected worker based on the current filter.
+                                        const workerKCoefficient = kCoefficient; // This is the K for the currently selected worker based on filteredDocuments
+
+                                        return (
+                                            <tr key={doc.ID_Document}>
+                                                {user?.role === 1 && (
+                                                    <>
+                                                        <td>{FIO}</td>
+                                                        <td>{Doljnost}</td>
+                                                    </>
+                                                )}
+                                                <td>{doc.ProgramName || 'N/A'}</td>
+                                                <td>{doc.OrgSName || doc.OrgFName || 'N/A'}</td>
+                                                <td>{doc.regnumber || 'N/A'}</td>
+                                                <td>{formatDate(doc.DateIssue)}</td>
+                                                {/* NEW: Last DOC Date, PK, PP, KKS Coeff */}
+                                                <td style={{ color: lastDocColor }}>{formatDate(lastDocDate)}</td>
+                                                <td>{pkCount}</td>
+                                                <td>{ppCount}</td>
+                                                <td>{workerKCoefficient}</td> {/* Display K for the selected worker/period */}
+                                                <td>
+                                                    <button
+                                                        className="details-button"
+                                                        onClick={() => openModal(doc)}
+                                                    >
+                                                        Дополнительно
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <div className="no-data-message full-width-message">
+                                {user.role === 1 ?
+                                    (selectedWorker === null ? "Пожалуйста, выберите работника для просмотра списка документов." : `Нет документов для отображения у выбранного работника (${getWorkerName()}) за выбранный период.`) :
+                                    "У вас пока нет загруженных документов за выбранный период."
+                                }
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
 
@@ -698,44 +830,36 @@ function DocumentAnalysis() {
             <Modal
                 isOpen={isModalOpen}
                 onRequestClose={closeModal}
-                contentLabel="Детали документа" // Accessibility label
-                className="modal-content" // Class for styling the modal content
-                overlayClassName="modal-overlay" // Class for styling the background overlay
-                ariaHideApp={true} // Helps with screen readers
+                contentLabel="Детали документа"
+                className="modal-content"
+                overlayClassName="modal-overlay"
+                ariaHideApp={true}
             >
-                {/* Content inside the modal */}
                 {selectedDocumentForModal ? (
                     <>
-                        {/* Modal Header */}
                         <h2>Детали документа № {selectedDocumentForModal.regnumber || selectedDocumentForModal.ID_Document}</h2>
                         <button onClick={closeModal} className="modal-close-button" aria-label="Закрыть">&times;</button>
 
-                        {/* Modal Body with Details */}
                         <div className="modal-details-grid">
-                             {/* Display various document details */}
-                              <p><strong>Работник:</strong> {selectedDocumentForModal.WorkerName || getWorkerName() || 'N/A'}</p>
-                              <p><strong>Программа обучения:</strong> {selectedDocumentForModal.ProgramName || 'N/A'}</p>
-                              <p><strong>Организация (полное):</strong> {selectedDocumentForModal.OrgFName || 'N/A'}</p>
-                              <p><strong>Организация (краткое):</strong> {selectedDocumentForModal.OrgSName || 'N/A'}</p>
-                              <p><strong>Регистрационный номер:</strong> {selectedDocumentForModal.regnumber || 'N/A'}</p>
-                              <p><strong>Дата выдачи:</strong> {formatDate(selectedDocumentForModal.DateIssue)}</p>
-                              {/* Add any other relevant fields from your 'doc' object */}
-
-                              {/* Display KKS Criteria */}
-                             <p className="kks-details">
-                                 <strong>Критерии ККС:</strong>
-                                 {/* Check if KKS_Data is an array and has items */}
-                                  {Array.isArray(selectedDocumentForModal.KKS_Data) && selectedDocumentForModal.KKS_Data.length > 0
-                                      ? selectedDocumentForModal.KKS_Data
-                                            .map(k => k.fullName || k.shortName) // Prefer full name, fallback to short
-                                            .filter(Boolean) // Remove any null/empty values
-                                            .join(', ') // Join with comma and space
-                                      : 'Нет данных'} {/* Message if no KKS data or not an array */}
-                             </p>
+                            <p><strong>Работник:</strong> {selectedDocumentForModal.WorkerName || getWorkerName() || 'N/A'}</p>
+                            <p><strong>Программа обучения:</strong> {selectedDocumentForModal.ProgramName || 'N/A'}</p>
+                            <p><strong>Организация (полное):</strong> {selectedDocumentForModal.OrgFName || 'N/A'}</p>
+                            <p><strong>Организация (краткое):</strong> {selectedDocumentForModal.OrgSName || 'N/A'}</p>
+                            <p><strong>Регистрационный номер:</strong> {selectedDocumentForModal.regnumber || 'N/A'}</p>
+                            <p><strong>Дата выдачи:</strong> {formatDate(selectedDocumentForModal.DateIssue)}</p>
+                            <p><strong>Тип программы:</strong> {selectedDocumentForModal.Type_ProgDPO || 'N/A'}</p>
+                            <p className="kks-details">
+                                <strong>Критерии ККС:</strong>
+                                {Array.isArray(selectedDocumentForModal.KKS_Data) && selectedDocumentForModal.KKS_Data.length > 0
+                                    ? selectedDocumentForModal.KKS_Data
+                                        .map(k => k.fullName || k.shortName)
+                                        .filter(Boolean)
+                                        .join(', ')
+                                    : 'Нет данных'}
+                            </p>
                         </div>
                     </>
                 ) : (
-                     // Fallback message if modal opens before data is ready (shouldn't usually happen)
                     <p>Загрузка деталей...</p>
                 )}
             </Modal>

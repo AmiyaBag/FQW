@@ -22,10 +22,8 @@ const kksRouter = require('./routes/kks');
 const workersRouter = require('./routes/workers');
 const documentsRouter = require('./routes/documents');
 const statusRouter = require('./routes/status'); // Роутер для статуса ККС
-const programTypesRouter = require('./routes/programTypes');
 
 // --- Подключение Роутеров ---
-app.use('/api/program-types', programTypesRouter);
 app.use('/api/auth', authRouter);           // Маршруты аутентификации (например, /api/auth/login)
 app.use('/api/programs', programsRouter);     // Маршруты для программ
 app.use('/api/organizations', organizationsRouter); // Маршруты для организаций

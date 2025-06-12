@@ -362,3 +362,232 @@
     text-align: center;
     color: #6c757d;
 }
+
+.user-container {
+    padding: 20px;
+    max-width: 900px;
+    margin: 20px auto;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    font-family: Arial, sans-serif;
+}
+
+.user-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+}
+
+.user-header h1 {
+    color: #333;
+    margin: 0;
+}
+
+.logout-button {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+.logout-button:hover {
+    background-color: #c82333;
+}
+
+.user-content {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.user-info,
+.user-kks-status-table,
+.general-list-section {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.user-info h2,
+.user-kks-status-table h2,
+.general-list-section h2 {
+    color: #0056b3;
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 20px;
+}
+
+.user-info p {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.kks-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+.kks-table th,
+.kks-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+}
+
+.kks-table th {
+    background-color: #e9ecef;
+    color: #495057;
+    font-weight: bold;
+}
+
+.status-ok {
+    color: green;
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
+.status-needed {
+    color: red;
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
+.recommendation-toggle-button,
+.toggle-list-button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 5px;
+    transition: background-color 0.2s ease;
+}
+
+.recommendation-toggle-button:hover,
+.toggle-list-button:hover {
+    background-color: #0056b3;
+}
+
+.recommendation-toggle-button:disabled,
+.toggle-list-button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.recommendations-row td {
+    background-color: #eaf6ff; /* Светло-голубой фон для строки рекомендаций */
+    padding: 15px;
+    border-top: 2px solid #007bff;
+}
+
+.recommendations-details h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.recommendations-details ul,
+.simple-list {
+    list-style-type: disc;
+    padding-left: 20px;
+    margin-top: 10px;
+}
+
+.recommendations-details ul li,
+.simple-list li {
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.program-item small {
+    display: block;
+    color: #666;
+    font-size: 0.85em;
+    margin-top: 2px;
+}
+
+.error-message {
+    color: red;
+    background-color: #ffe0e0;
+    border: 1px solid red;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+
+.loading {
+    text-align: center;
+    padding: 20px;
+    font-size: 1.1em;
+    color: #555;
+}
+
+.error-container {
+    text-align: center;
+    padding: 30px;
+    background-color: #fdd;
+    border: 1px solid #fbc;
+    border-radius: 8px;
+    max-width: 500px;
+    margin: 50px auto;
+}
+.error-container .error {
+    color: #c00;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+.error-container button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+}
+.error-container button:hover {
+    background-color: #0056b3;
+}
+
+
+.user-actions {
+    display: flex;
+    justify-content: flex-start;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.action-button {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.2s ease;
+}
+
+.action-button:hover {
+    background-color: #218838;
+}
+
+.list-content {
+    margin-top: 15px;
+    border: 1px solid #eee;
+    padding: 15px;
+    border-radius: 5px;
+    background-color: #fdfdfd;
+}
